@@ -1,0 +1,248 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score
+
+
+# Load data
+df = pd.read_csv('merged_educator_data.csv', low_memory=False)
+df.columns = df.columns.str.strip()
+
+
+# Filter
+df = df[df['District Code'] != 0]
+df = df[df['District Code'] != 12]
+df = df[df['District Code'] <= 9000]
+df = df[df['Job Classification'].str.contains('Teacher', na=False)]
+df = df[df['Job Classification'] != 'ALL']
+df = df[df['Gender'].isin(['Male', 'Female'])]
+
+
+# Clean numeric columns
+df['Average Total Salary'] = pd.to_numeric(
+    df['Average Total Salary'].astype(str).str.replace(',', ''),
+    errors='coerce'
+)
+
+
+df['Average Years of Experience'] = pd.to_numeric(
+    df['Average Years of Experience'],
+    errors='coerce'
+)
+
+
+df['Same School Retention Rate'] = pd.to_numeric(
+    df['Same School Retention Rate'],
+    errors='coerce'
+)
+
+
+df['Transfer Rate Within District'] = pd.to_numeric(
+    df['Transfer Rate Within District'],
+    errors='coerce'
+)
+
+
+df['Transfer Rate Between Districts'] = pd.to_numeric(
+    df['Transfer Rate Between Districts'],
+    errors='coerce'
+)
+
+
+df['Turnover Rate'] = pd.to_numeric(
+    df['Turnover Rate'],
+    errors='coerce'
+)
+
+
+df = df[df['Average Years of Experience'] > 0]
+
+
+df = df.dropna(subset=[
+    'Average Years of Experience',
+    'Average Total Salary',
+    'Same School Retention Rate',
+    'Transfer Rate Within District',
+    'Transfer Rate Between Districts',
+    'Turnover Rate'
+])
+
+# Outlier removal
+cleaned = []
+
+
+for d in df['District Code'].unique():
+    temp = df[df['District Code'] == d].copy()
+
+
+    Q1 = temp['Average Total Salary'].quantile(0.25)
+    Q3 = temp['Average Total Salary'].quantile(0.75)
+    IQR = Q3 - Q1
+
+
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+
+
+    temp = temp[
+        (temp['Average Total Salary'] >= lower) &
+        (temp['Average Total Salary'] <= upper)
+    ]
+
+
+    cleaned.append(temp)
+
+
+df = pd.concat(cleaned)
+
+
+# Group by district and average features
+grouped = df.groupby('District Code')[[
+    'Average Years of Experience',
+    'Same School Retention Rate',
+    'Transfer Rate Within District',
+    'Transfer Rate Between Districts',
+    'Turnover Rate',
+    'Average Total Salary'
+]].mean().reset_index()
+
+
+# Features and target
+X = grouped[[
+    'Average Years of Experience',
+    'Same School Retention Rate',
+    'Transfer Rate Within District',
+    'Transfer Rate Between Districts',
+    'Turnover Rate'
+]]
+
+
+y = grouped['Average Total Salary']
+
+
+# Random forest model
+model = RandomForestRegressor(
+    n_estimators=300,
+    random_state=42
+)
+
+
+model.fit(X, y)
+
+
+y_pred = model.predict(X)
+
+
+# Residual analysis
+grouped = grouped.copy()
+grouped['Predicted Salary'] = y_pred
+grouped['Residual'] = grouped['Average Total Salary'] - grouped['Predicted Salary']
+
+
+# Top 5 overpaying (Break curve high)
+top_over = grouped.sort_values('Residual', ascending=False).head(5)
+
+
+print("\n--- Top 5 Overpaying Districts (Higher than expected) ---")
+print(top_over[[
+    'District Code',
+    'Average Total Salary',
+    'Predicted Salary',
+    'Residual'
+]])
+
+
+# Top 5 underpaying (Break curve low)
+top_under = grouped.sort_values('Residual', ascending=True).head(5)
+
+
+print("\n--- Top 5 Underpaying Districts (Lower than expected) ---")
+print(top_under[[
+    'District Code',
+    'Average Total Salary',
+    'Predicted Salary',
+    'Residual'
+]])
+
+
+# Evaluation: R^2 Score
+r2 = r2_score(y, y_pred)
+
+
+print("R^2:", r2)
+
+
+# Feature importance
+importances = pd.Series(model.feature_importances_, index=X.columns)
+importances = importances.sort_values(ascending=False)
+
+
+print("\nFeature Importance:")
+print(importances)
+
+
+
+
+print("\n--- What affects teacher salary the most ---")
+for feature, value in importances.items():
+    print(f"{feature}: {value:.4f}")
+# VISUAL: Actual vs Predicted
+plt.figure(figsize=(10,8))
+
+
+plt.scatter(y, y_pred)
+
+
+# diagonal reference line
+plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--')
+
+
+# label each point with district code
+for i in range(len(grouped)):
+    plt.text(
+        y.iloc[i],
+        y_pred[i],
+        str(grouped['District Code'].iloc[i]),
+        fontsize=8,
+        alpha=0.7
+    )
+
+
+plt.xlabel("Actual Salary")
+plt.ylabel("Predicted Salary")
+plt.title("Random Forest: Actual vs Predicted (Labeled by District)")
+plt.grid(True)
+
+
+plt.show()
+
+
+print("\n--- Theoretical District Salary Predictor ---")
+
+
+# Get inputs
+experience = float(input("Average Years of Experience: "))
+retention = float(input("Same School Retention Rate: "))
+transfer_within = float(input("Transfer Rate Within District: "))
+transfer_between = float(input("Transfer Rate Between Districts: "))
+turnover = float(input("Turnover Rate: "))
+
+
+# Build DataFrame (SAFER than numpy array)
+X_new = pd.DataFrame([{
+    'Average Years of Experience': experience,
+    'Same School Retention Rate': retention,
+    'Transfer Rate Within District': transfer_within,
+    'Transfer Rate Between Districts': transfer_between,
+    'Turnover Rate': turnover
+}])
+
+
+# Predict
+predicted_salary = model.predict(X_new)[0]
+
+
+print("\nPredicted Average Salary for Theoretical District:")
+print(f"${predicted_salary:,.2f}")

@@ -1,0 +1,97 @@
+import numpy as np
+import pandas as pd
+
+df = pd.read_csv('merged_educator_data.csv', low_memory=False)
+df.columns = df.columns.str.strip()
+
+df = df[
+    (df['School Year'] == 2025) &
+    (df['District Code'] != 0) &  # 🚨 REMOVE STATEWIDE
+    (df['Job Classification'].str.contains('Teacher', na=False)) &
+    (df['Job Classification'] != 'ALL') &
+    (df['Gender'].isin(['Male', 'Female']))
+].copy()
+
+numeric_cols = [
+    'Average Total Salary',
+    'Average Years of Experience',
+    'Same School Retention Rate',
+    'Transfer Rate Within District',
+    'Transfer Rate Between Districts',
+    'Turnover Rate'
+]
+
+for col in numeric_cols:
+    df[col] = pd.to_numeric(
+        df[col].astype(str).str.replace(',', ''),
+        errors='coerce'
+    )
+
+df = df.dropna(subset=numeric_cols + ['District Code'])
+
+df_grouped = df.groupby('District Code', as_index=False).agg({
+    'Average Total Salary': 'mean',
+    'Average Years of Experience': 'mean',
+    'Same School Retention Rate': 'mean',
+    'Transfer Rate Within District': 'mean',
+    'Transfer Rate Between Districts': 'mean',
+    'Turnover Rate': 'mean'
+})
+
+features = [
+    'Average Years of Experience',
+    'Average Total Salary',
+    'Same School Retention Rate',
+    'Transfer Rate Within District',
+    'Transfer Rate Between Districts'
+]
+
+target = 'Turnover Rate'
+
+CR_CODE = 10  # change if needed for different district
+
+target_row = df_grouped[df_grouped['District Code'] == CR_CODE]
+
+if target_row.empty:
+    print("Caesar Rodney not found — check district code")
+    exit()
+
+train = df_grouped[df_grouped['District Code'] != CR_CODE]
+
+X_train = train[features].values
+y_train = train[target].values
+
+X_target = target_row[features].values
+
+mean = X_train.mean(axis=0)
+std = X_train.std(axis=0) + 1e-8
+
+X_train_norm = (X_train - mean) / std
+X_target_norm = (X_target - mean) / std
+
+def knn_predict(X_train, y_train, X_test, k=5):
+    preds = []
+
+    for x0 in X_test:
+        distances = np.linalg.norm(X_train - x0, axis=1)
+        idx = np.argsort(distances)[:k]
+        preds.append(np.mean(y_train[idx]))
+
+    return np.array(preds)
+
+pred = knn_predict(X_train_norm, y_train, X_target_norm, k=5)
+
+actual = target_row[target].values[0]
+
+print("\nCaesar Rodney Prediction (2025)")
+print("--------------------------------")
+print(f"Predicted Turnover Rate: {pred[0]:.2f}")
+print(f"Actual Turnover Rate:    {actual:.2f}")
+print(f"Error:                  {abs(pred[0] - actual):.2f}")
+
+distances = np.linalg.norm(X_train_norm - X_target_norm, axis=1)
+nearest_idx = np.argsort(distances)[:5]
+
+print("\nNearest Districts Used:")
+for i in nearest_idx:
+    print(f"District {train.iloc[i]['District Code']} | Turnover = {y_train[i]:.2f}")
