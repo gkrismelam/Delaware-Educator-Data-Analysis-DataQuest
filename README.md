@@ -1,6 +1,6 @@
 # Delaware Educator Data Analysis (DataQuest 2026)
 
-This project analyzes educator salary and mobility data provided by the Delaware Department of Education. The dataset contains approximately a few million records and is used to explore trends in educator salary, turnover, and movement across districts.
+This project analyzes educator salary and mobility data provided by the Delaware Department of Education. The dataset contains approximately 5 million records and is used to explore trends in educator salary, turnover, and movement across districts.
 
 ---
 
@@ -69,5 +69,5 @@ The goal of this project is to explore relationships between educator salary, ex
 
 ## Notes
 
-* The raw datasets are large (~3 million rows total), so processing may take time depending on system performance.
+* The raw datasets are large (~5 million rows total), so processing may take time depending on system performance.
 * Ensure sufficient memory is available when running the scripts.
