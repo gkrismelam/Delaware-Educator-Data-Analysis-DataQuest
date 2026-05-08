@@ -51,13 +51,13 @@ This will generate the merged dataset used for analysis in the other files.
 
 ---
 
-## 📌 Project Purpose
+## Project Purpose
 
 The goal of this project is to explore relationships between educator salary, experience, and mobility patterns across Delaware school districts using real-world administrative data.
 
 ---
 
-## 🛠 Tools Used
+## Tools Used
 
 * Python
 * Pandas
@@ -66,6 +66,8 @@ The goal of this project is to explore relationships between educator salary, ex
 * Seaborn
 
 ---
+
+## Notes
 
 * The raw datasets are large (~3 million rows total), so processing may take time depending on system performance.
 * Ensure sufficient memory is available when running the scripts.
